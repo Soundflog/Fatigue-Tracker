@@ -1,0 +1,10 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+PyYAML
+scipy
+# Для глубинных методов установите отдельно:
+# torch
+# torchvision
+# torchaudio
