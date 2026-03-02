@@ -2,13 +2,15 @@ paths:
   raw_root: data/raw
   out_root: data/processed
   results_root: results
+  # Путь к PhysioNet внутри data/ (двойная вложенность)
+  physionet_root: "data/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1/Wearable_Dataset"
 
 processing:
-  # Данные уже сегментированы по шагам (strides)
-  target_stride_len: 100    # длина шага после ресемплинга
-  channels: ["ax", "ay", "az", "gx", "gy", "gz"]
+  target_stride_len: 100        # длина окна после ресемплинга (точек)
+  imu_channels: ["ax", "ay", "az", "gx", "gy", "gz"]   # 6 каналов IMU
+  physio_channels: ["bvp", "eda", "temp", "hr"]          # 4 физиологических канала
   normalization: "zscore_per_subject"
-  use_sets: ["zenodo", "4tu"]  # FatigueSet исключён (ментальная усталость)
+  use_sets: ["zenodo", "4tu", "physionet"]  # FatigueSet исключён (ментальная усталость)
 
 zenodo:
   # CSV файлы с шагами (180 точек @ 256 Hz)
@@ -23,16 +25,69 @@ ftu:
   segment: "pelvis"         # используемый сегмент тела
   # Разметка: pre-fatigue (0-2k, 2-4k) vs post-fatigue (postfatigue1200m)
 
+physionet:
+  # Empatica E4, непрерывные записи
+  protocols: ["AEROBIC", "ANAEROBIC"]   # STRESS исключён (когнитивный)
+  window_sec: 5.0           # длина скользящего окна (секунды)
+  stride_sec: 2.5           # шаг окна = 50% overlap
+  modalities:
+    ACC:  { fs: 32,  channels: 3, unit: "1/64g" }
+    BVP:  { fs: 64,  channels: 1, unit: "au" }
+    EDA:  { fs: 4,   channels: 1, unit: "uS" }
+    TEMP: { fs: 4,   channels: 1, unit: "C" }
+    HR:   { fs: 1,   channels: 1, unit: "bpm" }
+  # Стратегия разметки: первые 50% фаз = NF (0), вторые 50% = F (1)
+  fatigue_ratio: 0.5
+  # Ограничения (data_constraints.txt)
+  exclude_subjects:
+    AEROBIC: ["S12"]         # отсутствует
+    ANAEROBIC: []
+
+model:
+  # CNN + LSTM (двухветочная архитектура)
+  name: "FatigueCNN_LSTM"
+  imu_encoder:
+    conv_filters: [64, 128, 256]
+    kernel_sizes: [7, 5, 3]
+    dropout: 0.2
+  physio_encoder:
+    conv_filters: [32, 64, 128]
+    kernel_sizes: [7, 5, 3]
+    dropout: 0.2
+  lstm:
+    hidden_size: 128
+    num_layers: 1
+    bidirectional: true
+    dropout: 0.3
+  classifier:
+    hidden: 128
+    dropout: 0.5
+
+training:
+  batch_size: 64
+  epochs: 50
+  lr: 0.001
+  weight_decay: 1e-4
+  patience: 10
+  min_delta: 1e-3
+  scheduler: "cosine"
+
 splits:
   loso: true
   cross_dataset:
-    # Кросс-датасетная валидация
     fold1:
       train: ["zenodo"]
       test: ["4tu"]
     fold2:
       train: ["4tu"]
       test: ["zenodo"]
+  cross_domain:
+    fold1:
+      train: ["zenodo", "4tu"]
+      test: ["physionet"]
+    fold2:
+      train: ["physionet"]
+      test: ["zenodo", "4tu"]
   mixed_split:
     train_ratio: 0.7
     val_ratio: 0.15
