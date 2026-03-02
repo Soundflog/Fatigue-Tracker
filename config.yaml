@@ -1,0 +1,39 @@
+paths:
+  raw_root: data/raw
+  out_root: data/processed
+  results_root: results
+
+processing:
+  # Данные уже сегментированы по шагам (strides)
+  target_stride_len: 100    # длина шага после ресемплинга
+  channels: ["ax", "ay", "az", "gx", "gy", "gz"]
+  normalization: "zscore_per_subject"
+  use_sets: ["zenodo", "4tu"]  # FatigueSet исключён (ментальная усталость)
+
+zenodo:
+  # CSV файлы с шагами (180 точек @ 256 Hz)
+  original_stride_len: 180
+  original_fs: 256
+  label_column: 1           # F = fatigue, NF = not fatigue
+
+ftu:
+  # MAT файлы с шагами (150 точек @ 240 Hz)
+  original_stride_len: 150
+  original_fs: 240
+  segment: "pelvis"         # используемый сегмент тела
+  # Разметка: pre-fatigue (0-2k, 2-4k) vs post-fatigue (postfatigue1200m)
+
+splits:
+  loso: true
+  cross_dataset:
+    # Кросс-датасетная валидация
+    fold1:
+      train: ["zenodo"]
+      test: ["4tu"]
+    fold2:
+      train: ["4tu"]
+      test: ["zenodo"]
+  mixed_split:
+    train_ratio: 0.7
+    val_ratio: 0.15
+    test_ratio: 0.15
