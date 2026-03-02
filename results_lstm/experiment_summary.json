@@ -1,0 +1,18 @@
+{
+  "model": "FatigueCNN_LSTM",
+  "architecture": "CNN (IMU+Physio encoders) + BiLSTM + Classifier",
+  "total_parameters": 739041,
+  "imu_channels": 6,
+  "physio_channels": 4,
+  "window_size": 100,
+  "total_windows": 70898,
+  "domains": [
+    "4tu",
+    "physionet",
+    "zenodo"
+  ],
+  "unique_subjects": 90,
+  "class_balance": "45.7% positive",
+  "physio_coverage": "64.9% windows with physio",
+  "best_model_path": "D:\\Github\\afc_lab\\results_lstm\\best_model_lstm.pth"
+}
