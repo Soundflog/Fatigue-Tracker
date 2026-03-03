@@ -1,0 +1,25 @@
+{
+  "model": "FatigueCNN_Attention",
+  "architecture": "CNN (IMU+Physio encoders) + Temporal Attention + Classifier",
+  "improvements": [
+    "WSD4FEDSRM dataset (+34 subjects)",
+    "Temporal Attention (replaces GAP+BiLSTM)",
+    "Data augmentation (9 techniques)"
+  ],
+  "total_parameters": 249763,
+  "imu_channels": 6,
+  "physio_channels": 4,
+  "window_size": 100,
+  "total_windows": 72022,
+  "domains": [
+    "4tu",
+    "physionet",
+    "wsd4fedsrm",
+    "zenodo"
+  ],
+  "unique_subjects": 294,
+  "class_balance": "46.1% positive",
+  "physio_coverage": "65.5% windows with physio",
+  "augmentation": "gaussian_noise, time_warp, channel_dropout, magnitude_scale, window_slice, time_reverse, imu_rotate, physio_mask, SO3_rotation",
+  "best_model_path": "D:\\Github\\afc_lab\\results_augmented\\best_model_lstm.pth"
+}
