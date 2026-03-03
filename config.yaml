@@ -10,7 +10,17 @@ processing:
   imu_channels: ["ax", "ay", "az", "gx", "gy", "gz"]   # 6 каналов IMU
   physio_channels: ["bvp", "eda", "temp", "hr"]          # 4 физиологических канала
   normalization: "zscore_per_subject"
-  use_sets: ["zenodo", "4tu", "physionet"]  # FatigueSet исключён (ментальная усталость)
+  use_sets: ["zenodo", "4tu", "physionet", "wsd4fedsrm"]  # FatigueSet исключён (ментальная усталость)
+
+wsd4fedsrm:
+  # IMU (Sternum segment, 100 Hz), PPG (200 Hz)
+  original_fs_imu: 100
+  original_fs_ppg: 200
+  segment: "Sternum"
+  exercises: ["30-40_ external rotation", "30-40_ internal rotation"]
+  rpe_fatigue_threshold: 14      # RPE >= 14 → fatigue
+  rpe_normal_threshold: 11       # RPE <= 11 → normal
+  # RPE 12-13 → excluded (borderline)
 
 zenodo:
   # CSV файлы с шагами (180 точек @ 256 Hz)
