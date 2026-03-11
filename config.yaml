@@ -3,7 +3,7 @@ paths:
   out_root: data/processed
   results_root: results
   # Путь к PhysioNet внутри data/ (двойная вложенность)
-  physionet_root: "data/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1/Wearable_Dataset"
+  physionet_root: "data/raw/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1/Wearable_Dataset"
 
 processing:
   target_stride_len: 100        # длина окна после ресемплинга (точек)
@@ -39,7 +39,7 @@ physionet:
   # Empatica E4, непрерывные записи
   protocols: ["AEROBIC", "ANAEROBIC"]   # STRESS исключён (когнитивный)
   window_sec: 5.0           # длина скользящего окна (секунды)
-  stride_sec: 2.5           # шаг окна = 50% overlap
+  stride_sec: 5.0           # шаг окна = без overlap (v4.0: было 2.5)
   modalities:
     ACC:  { fs: 32,  channels: 3, unit: "1/64g" }
     BVP:  { fs: 64,  channels: 1, unit: "au" }

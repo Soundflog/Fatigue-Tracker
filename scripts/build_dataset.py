@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Сборка композиционного датасета из Zenodo, 4TU и PhysioNet.
+Сборка композиционного датасета из Zenodo, 4TU, PhysioNet и WSD4FEDSRM (v4.0).
 
 Источники:
 - Zenodo: CSV, stride-segmented, 180 точек/шаг @ 256 Hz, IMU (acc+gyro)
 - 4TU: MAT, stride-segmented, 150 точек/шаг @ 240 Hz, IMU (acc+gyro)
 - PhysioNet: Empatica E4 CSV, непрерывные записи,
              ACC(32Hz)+BVP(64Hz)+EDA(4Hz)+TEMP(4Hz)+HR(1Hz)
+- WSD4FEDSRM: IMU Sternum (100Hz) + PPG (200Hz), Borg RPE labeling
 
 Выход: NPZ с двумя тензорами:
   X_imu      (N, 100, 6)  — ax, ay, az, gx, gy, gz
@@ -14,7 +15,7 @@
   y          (N,)
   pids       (N,)
   domains    (N,)
-  has_physio (N,)          — True для PhysioNet, False для Zenodo/4TU
+  has_physio (N,)          — True для PhysioNet/WSD4FEDSRM, False для Zenodo/4TU
 """
 
 import argparse
@@ -57,7 +58,7 @@ PHYSIONET_EXCLUDE = {
 }
 
 PHYSIONET_WINDOW_SEC = 5.0    # длина окна в секундах
-PHYSIONET_STRIDE_SEC = 2.5    # шаг окна (50% overlap)
+PHYSIONET_STRIDE_SEC = 5.0    # шаг окна — без overlap (v4.0: было 2.5)
 PHYSIONET_FATIGUE_RATIO = 0.5 # последние 50% фаз → fatigue
 
 
@@ -226,12 +227,19 @@ def load_4tu(data_dir: Path, segment: str = 'pelvis') -> dict:
         acc_data = strides[acc_field]
         angvel_data = strides[angvel_field] if angvel_field in field_names else None
 
+        # 4TU _nacc fields are acceleration norms (scalar per time-step)
+        # Also load jerk for additional gait kinematic channel
+        jerk_field = f'{segment}_jerk'
+        jerk_data = strides[jerk_field] if jerk_field in field_names else None
+
         if acc_data.ndim == 2:
             n_strides = acc_data.shape[1]
             X_subj = np.zeros((n_strides, TARGET_STRIDE_LEN, 6), dtype=np.float32)
 
             for i in range(n_strides):
                 X_subj[i, :, 0] = resample_stride(acc_data[:, i], TARGET_STRIDE_LEN)
+                if jerk_data is not None and jerk_data.ndim >= 2:
+                    X_subj[i, :, 1] = resample_stride(jerk_data[:, i], TARGET_STRIDE_LEN)
                 if angvel_data is not None:
                     X_subj[i, :, 3] = resample_stride(angvel_data[:, i], TARGET_STRIDE_LEN)
 
@@ -249,8 +257,18 @@ def load_4tu(data_dir: Path, segment: str = 'pelvis') -> dict:
             print(f"   ⚠️ Неизвестная размерность для p{pid:03d}: {acc_data.shape}")
             continue
 
+        # 4TU protocol: 4000m pre-fatigue + 1200m post-fatigue
+        # Check if postfatigue trial exists for this subject
+        postfatigue_exists = any(data_dir.glob(f'p{pid:03d}_HDSL_postfatigue*.mat'))
+        if not postfatigue_exists:
+            print(f"   ⚠️ p{pid:03d}: нет postfatigue файла, пропускаем")
+            continue
+
+        # Last ~23% of strides are post-fatigue (1200m out of 5200m total)
+        fatigue_frac = 1200.0 / (4000.0 + 1200.0)
+        n_fatigue = max(1, int(n_strides * fatigue_frac))
         labels = np.zeros(n_strides, dtype=np.int8)
-        labels[n_strides // 2:] = 1
+        labels[-n_fatigue:] = 1
 
         all_X.append(X_subj)
         all_labels.append(labels)
@@ -569,7 +587,9 @@ def load_physionet(
                 all_X_imu.append(X_imu)
                 all_X_physio.append(X_physio)
                 all_y.append(labels)
-                pid_str = f"physionet_{subj_id_clean}_{protocol.lower()}"
+                # Use base person ID (not session suffix) to prevent same-person leakage
+                # S11_a/S11_b → S11, S16_a/S16_b → S16
+                pid_str = f"physionet_{base_id}"
                 all_pids.extend([pid_str] * len(labels))
 
             except Exception as e:
@@ -601,6 +621,188 @@ def load_physionet(
 
 
 # =============================================================================
+# Загрузка WSD4FEDSRM
+# =============================================================================
+
+# Маппинг папок → task id (MVIC исключены)
+WSD4FEDSRM_TASKS = {
+    "30-40_ internal rotation": "task1_35i",
+    "30-40_ external rotation": "task4_35e",
+    "40-50_ internal rotation": "task2_45i",
+    "40-50_ external rotation": "task5_45e",
+    "50-60_ internal rotation": "task3_55i",
+    "50-60_ external rotation": "task6_55e",
+}
+
+WSD4FEDSRM_IMU_FS = 100   # Hz
+WSD4FEDSRM_PPG_FS = 200   # Hz
+WSD4FEDSRM_WINDOW_SEC = 10 # RPE каждые 10 сек
+WSD4FEDSRM_RPE_NORMAL = 11   # RPE <= 11 → 0
+WSD4FEDSRM_RPE_FATIGUE = 14  # RPE >= 14 → 1
+
+
+def load_wsd4fedsrm(
+    data_dir: Path,
+    segment: str = "Sternum",
+    target_len: int = 100,
+) -> dict:
+    """
+    Загрузка WSD4FEDSRM: IMU (Sternum) + PPG, разметка по Borg RPE.
+
+    PID стратегия: по человеку (wsd_001 ... wsd_034), НЕ по задаче.
+
+    Returns:
+        dict с X_imu, X_physio, y, pids, domain, has_physio
+    """
+    print("\n📂 Загрузка WSD4FEDSRM...")
+
+    borg_path = data_dir / "Borg data" / "borg_data.csv"
+    if not borg_path.exists():
+        raise FileNotFoundError(f"Borg data не найден: {borg_path}")
+
+    borg_df = pd.read_csv(borg_path)
+    borg_df.columns = [c.strip() for c in borg_df.columns]
+    borg_df["subject"] = borg_df["subject"].ffill()  # subject заполнен только на первой строке группы
+
+    # Определяем RPE-столбцы (10_sec, 20_sec, ... но НЕ length_of_trial_(sec))
+    rpe_cols = []
+    for col in borg_df.columns:
+        if "_sec" in col and "length" not in col.lower() and col not in ("before_task", "end_of_trial"):
+            try:
+                t = int(col.split("_")[0])
+                rpe_cols.append((t, col))
+            except ValueError:
+                continue
+    rpe_cols.sort(key=lambda x: x[0])
+
+    print(f"   RPE столбцов: {len(rpe_cols)} ({rpe_cols[0][1]} ... {rpe_cols[-1][1]})")
+
+    data_root = data_dir / "EMG, IMU, and PPG data"
+
+    all_X_imu = []
+    all_X_physio = []
+    all_y = []
+    all_pids = []
+    skipped_trials = 0
+
+    for folder, task_id in WSD4FEDSRM_TASKS.items():
+        folder_path = data_root / folder
+        if not folder_path.exists():
+            print(f"   ⚠️ Папка не найдена: {folder}")
+            continue
+
+        subj_dirs = sorted(
+            [d for d in folder_path.iterdir() if d.is_dir() and d.name.startswith("Subject")],
+            key=lambda d: int(d.name.split()[-1]),
+        )
+
+        for subj_dir in subj_dirs:
+            pid_num = int(subj_dir.name.split()[-1])
+            pid_str = f"wsd_{pid_num:03d}"
+
+            # Borg RPE для этого субъекта + задачи
+            subj_key = f"subject_{pid_num}"
+            borg_row = borg_df[
+                (borg_df["subject"] == subj_key) &
+                (borg_df["task_order"].astype(str).str.strip() == task_id)
+            ]
+            if borg_row.empty:
+                skipped_trials += 1
+                continue
+
+            borg_row = borg_row.iloc[0]
+
+            # IMU файлы
+            acc_path = subj_dir / "IMU data" / segment / f"acc_{segment.lower()}.csv"
+            gyr_path = subj_dir / "IMU data" / segment / f"gyr_{segment.lower()}.csv"
+
+            if not acc_path.exists():
+                skipped_trials += 1
+                continue
+
+            try:
+                acc = pd.read_csv(acc_path).values.astype(np.float32)
+                gyr = pd.read_csv(gyr_path).values.astype(np.float32) if gyr_path.exists() else np.zeros_like(acc)
+
+                # PPG
+                ppg_path = subj_dir / "PPG data" / "ppg.csv"
+                ppg = pd.read_csv(ppg_path).values.astype(np.float32).ravel() if ppg_path.exists() else np.array([])
+
+                imu_data = np.hstack([acc[:, :3], gyr[:, :3]])  # (N, 6)
+
+                # Нарезка на 10-сек окна с RPE labels
+                for t_sec, col_name in rpe_cols:
+                    rpe_val = borg_row.get(col_name)
+                    if pd.isna(rpe_val):
+                        continue
+                    rpe_val = float(rpe_val)
+
+                    if rpe_val <= WSD4FEDSRM_RPE_NORMAL:
+                        label = 0
+                    elif rpe_val >= WSD4FEDSRM_RPE_FATIGUE:
+                        label = 1
+                    else:
+                        continue  # RPE 12-13: skip
+
+                    # Окно индексов
+                    win_idx = (t_sec // WSD4FEDSRM_WINDOW_SEC) - 1
+                    imu_start = win_idx * WSD4FEDSRM_WINDOW_SEC * WSD4FEDSRM_IMU_FS
+                    imu_end = (win_idx + 1) * WSD4FEDSRM_WINDOW_SEC * WSD4FEDSRM_IMU_FS
+                    imu_start, imu_end = int(imu_start), int(imu_end)
+
+                    if imu_end > len(imu_data) or (imu_end - imu_start) < 50:
+                        continue
+
+                    imu_seg = imu_data[imu_start:imu_end]
+                    x_imu = np.zeros((target_len, 6), dtype=np.float32)
+                    for c in range(6):
+                        x_imu[:, c] = resample_stride(imu_seg[:, c], target_len)
+
+                    x_physio = np.zeros((target_len, 4), dtype=np.float32)
+                    if len(ppg) > 0:
+                        ppg_start = int(imu_start * WSD4FEDSRM_PPG_FS / WSD4FEDSRM_IMU_FS)
+                        ppg_end = int(imu_end * WSD4FEDSRM_PPG_FS / WSD4FEDSRM_IMU_FS)
+                        if ppg_end <= len(ppg) and (ppg_end - ppg_start) >= 50:
+                            x_physio[:, 0] = resample_stride(ppg[ppg_start:ppg_end], target_len)
+
+                    all_X_imu.append(x_imu)
+                    all_X_physio.append(x_physio)
+                    all_y.append(label)
+                    all_pids.append(pid_str)
+
+            except Exception as e:
+                print(f"      ❌ Subject {pid_num} / {task_id}: {e}")
+                skipped_trials += 1
+                continue
+
+    if not all_X_imu:
+        raise ValueError("Не удалось загрузить ни одного окна WSD4FEDSRM")
+
+    X_imu = np.stack(all_X_imu)
+    X_physio = np.stack(all_X_physio)
+    y = np.array(all_y, dtype=np.int8)
+    pids = np.array(all_pids)
+    n_total = len(y)
+
+    print(f"\n   ✅ WSD4FEDSRM итого:")
+    print(f"      Окон: {n_total}")
+    print(f"      Пропущено trials: {skipped_trials}")
+    print(f"      Уникальных субъектов (PID): {len(np.unique(pids))}")
+    print(f"      Баланс: {y.sum()}/{n_total} ({y.mean()*100:.1f}% fatigue)")
+
+    return {
+        'X_imu': X_imu,
+        'X_physio': X_physio,
+        'y': y,
+        'pids': pids,
+        'domain': np.array(['wsd4fedsrm'] * n_total),
+        # WSD4FEDSRM PPG ≠ Empatica BVP; EDA/TEMP/HR channels are zeros
+        # Mark as no-physio to avoid misleading the physio encoder
+        'has_physio': np.zeros(n_total, dtype=bool),
+    }
+
+
+# =============================================================================
 # Сборка композиционного датасета
 # =============================================================================
 
@@ -611,12 +813,13 @@ def build_composite_dataset(
     use_zenodo: bool = True,
     use_4tu: bool = True,
     use_physionet: bool = True,
+    use_wsd4fedsrm: bool = True,
     segment_4tu: str = 'pelvis',
 ):
-    """Сборка и сохранение композиционного датасета (dual-branch)."""
+    """Сборка и сохранение композиционного датасета (dual-branch, v4.0)."""
 
     print("=" * 60)
-    print("СБОРКА КОМПОЗИЦИОННОГО ДАТАСЕТА (v3.0)")
+    print("СБОРКА КОМПОЗИЦИОННОГО ДАТАСЕТА (v4.0)")
     print("=" * 60)
 
     datasets = []
@@ -655,6 +858,16 @@ def build_composite_dataset(
                 print(f"❌ Ошибка загрузки PhysioNet: {e}")
         else:
             print(f"⚠️ Директория PhysioNet не найдена: {physionet_dir}")
+
+    if use_wsd4fedsrm:
+        wsd_dir = raw_dir / 'WSD4FEDSRM'
+        if wsd_dir.exists():
+            try:
+                datasets.append(load_wsd4fedsrm(wsd_dir))
+            except Exception as e:
+                print(f"❌ Ошибка загрузки WSD4FEDSRM: {e}")
+        else:
+            print(f"⚠️ Директория WSD4FEDSRM не найдена: {wsd_dir}")
 
     if not datasets:
         raise ValueError("Не удалось загрузить ни один датасет!")
@@ -744,7 +957,7 @@ def build_composite_dataset(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Сборка композиционного датасета из Zenodo, 4TU и PhysioNet"
+        description="Сборка композиционного датасета из Zenodo, 4TU, PhysioNet и WSD4FEDSRM"
     )
     parser.add_argument(
         '--raw-dir',
@@ -756,8 +969,7 @@ def main():
         '--physionet-dir',
         type=Path,
         default=(
-            PROJECT_ROOT / 'data'
-            / 'wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1'
+            PROJECT_ROOT / 'data' / 'raw'
             / 'wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1'
             / 'Wearable_Dataset'
         ),
@@ -772,6 +984,7 @@ def main():
     parser.add_argument('--no-zenodo', action='store_true', help="Не использовать Zenodo")
     parser.add_argument('--no-4tu', action='store_true', help="Не использовать 4TU")
     parser.add_argument('--no-physionet', action='store_true', help="Не использовать PhysioNet")
+    parser.add_argument('--no-wsd4fedsrm', action='store_true', help="Не использовать WSD4FEDSRM")
     parser.add_argument(
         '--segment',
         type=str,
@@ -789,6 +1002,7 @@ def main():
         use_zenodo=not args.no_zenodo,
         use_4tu=not args.no_4tu,
         use_physionet=not args.no_physionet,
+        use_wsd4fedsrm=not args.no_wsd4fedsrm,
         segment_4tu=args.segment,
     )
 
