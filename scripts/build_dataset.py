@@ -815,6 +815,7 @@ def build_composite_dataset(
     use_physionet: bool = True,
     use_wsd4fedsrm: bool = True,
     segment_4tu: str = 'pelvis',
+    segment_wsd: str = 'Forearm',
 ):
     """Сборка и сохранение композиционного датасета (dual-branch, v4.0)."""
 
@@ -863,7 +864,7 @@ def build_composite_dataset(
         wsd_dir = raw_dir / 'WSD4FEDSRM'
         if wsd_dir.exists():
             try:
-                datasets.append(load_wsd4fedsrm(wsd_dir))
+                datasets.append(load_wsd4fedsrm(wsd_dir, segment=segment_wsd))
             except Exception as e:
                 print(f"❌ Ошибка загрузки WSD4FEDSRM: {e}")
         else:
@@ -992,6 +993,13 @@ def main():
         choices=['pelvis', 'sternum', 'lfoot', 'rfoot', 'lll', 'rll', 'lul', 'rul'],
         help="Сегмент тела для 4TU (default: pelvis)"
     )
+    parser.add_argument(
+        '--wsd-segment',
+        type=str,
+        default='Forearm',
+        choices=['Forearm', 'Hand', 'Sternum', 'Shoulder', 'Pelvis', 'Upper arm'],
+        help="Сегмент тела для WSD4FEDSRM (default: Forearm)"
+    )
 
     args = parser.parse_args()
 
@@ -1004,6 +1012,7 @@ def main():
         use_physionet=not args.no_physionet,
         use_wsd4fedsrm=not args.no_wsd4fedsrm,
         segment_4tu=args.segment,
+        segment_wsd=args.wsd_segment,
     )
 
 
