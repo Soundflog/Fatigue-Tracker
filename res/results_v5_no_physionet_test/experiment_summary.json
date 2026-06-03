@@ -1,0 +1,30 @@
+{
+  "version": "v5.1",
+  "model": "FatigueCNN_Simple",
+  "architecture": "CNN (IMU encoder) + Temporal Attention + Classifier",
+  "changes_vs_v5": [
+    "Removed PhysioNet dataset (~47% windows, ACC-only → domain shift)",
+    "Kept Zenodo + 4TU (both have full 6-ch IMU: acc + gyro)"
+  ],
+  "changes_vs_v4": [
+    "Removed Physio branch (BVP, EDA, TEMP, HR)",
+    "Removed LSTM block",
+    "Removed WSD4FEDSRM dataset",
+    "Removed PhysioNet dataset",
+    "Reduced model: 80K → 27K params"
+  ],
+  "total_parameters": 3082,
+  "imu_channels": 6,
+  "window_size": 100,
+  "total_windows": 22416,
+  "domains": [
+    "4tu",
+    "zenodo"
+  ],
+  "unique_subjects": 26,
+  "class_balance": "30.6% positive",
+  "augmentation": "gaussian_noise, time_warp, channel_dropout, magnitude_scale, window_slice, time_reverse, imu_rotate",
+  "best_model_path": "D:\\Github\\afc_lab\\results_v5_no_physionet_test\\best_model_v5.pth",
+  "best_threshold": 0.5149999999999999,
+  "best_val_f1": 0.6939030427371364
+}
