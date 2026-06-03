@@ -1,0 +1,62 @@
+{
+  "es_model": {
+    "val_threshold": {
+      "f1": 0.7919120556858209,
+      "auc": 0.8781383861127731,
+      "pr_auc": 0.81745115682641,
+      "bacc": 0.8057849320928732,
+      "threshold": 0.4858718812465668
+    },
+    "optimal_threshold": {
+      "f1": 0.7966550555106413,
+      "auc": 0.8781383861127731,
+      "pr_auc": 0.81745115682641,
+      "bacc": 0.8084754123068632,
+      "threshold": 0.4932591199874878
+    }
+  },
+  "swa_model": {},
+  "best_epoch": 7,
+  "val_f1_phys": 0.861401447447929,
+  "config": {
+    "imu_channels": 6,
+    "physio_channels": 4,
+    "window_len": 100,
+    "n_domains": 4,
+    "domain_emb": 6,
+    "use_domain_in_classifier": false,
+    "encoder_channels": 12,
+    "physio_encoder_channels": 12,
+    "kernel_sizes": [
+      7,
+      5,
+      3,
+      3
+    ],
+    "attention_heads": 4,
+    "use_se": true,
+    "physio_use_pool": true,
+    "encoder_dropout": 0.5,
+    "classifier_dropout": 0.6,
+    "drop_path_rate": 0.1,
+    "batch_size": 64,
+    "epochs": 60,
+    "lr": 7e-05,
+    "warmup_epochs": 6,
+    "weight_decay": 0.04,
+    "patience": 8,
+    "min_delta": 0.0001,
+    "focal_gamma": 2.0,
+    "label_smoothing": 0.08,
+    "mixup_alpha": 0.3,
+    "rdrop_alpha": 0.1,
+    "swa_start_frac": 0.4,
+    "swa_lr": 5e-06,
+    "physionet_weight": 1.0,
+    "other_weight": 1.0,
+    "cap_per_other_domain": null,
+    "finetune_epochs": 0,
+    "finetune_lr": 5e-05,
+    "tta_n": 5
+  }
+}
