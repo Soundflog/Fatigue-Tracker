@@ -1,0 +1,7 @@
+run,stride_sec,batch,lr,enc_ch,enc_drop,kernels,eng_hidden,eng_drop,clf_drop,focal_gamma,label_smoothing,mixup,diagnosis,val_f1,best_epoch,threshold,test_f1,test_auc,test_bal_acc
+v11.0,5,64,0.0003,24,0.35,"[21,13,7,3]",32,0.3,0.4,1.5,0.0,0.0,overfit (best_ep<=5),,,,,,
+v11.1,5,32,0.0003,24,0.55,"[21,13,8,4]",32,0.3,0.25,2.1,0.0,0.2,overfit+underfit hybrid,,,,,,
+v11.2,5,32,0.0003,16,0.55,"[21,13,8,4]",16,0.3,0.25,2.1,0.0,0.2,overfit (val F1 unstable),,,,,,
+v11.3,20,32,0.0003,24,0.4,"[21,13,8,4]",32,0.35,0.35,2.1,0.1,0.2,overfit (best_ep<=7),,,,,,
+v11.4,20,16,0.0001,16,0.4,"[16,8,4,2]",16,0.4,0.4,3.1,0.1,0.2,overfit (train/val gap),,,,,,
+v11.5_BEST,20,8,6e-05,12,0.4,"[16,8,4,2]",8,0.45,0.45,3.1,0.15,0.1,BEST — stable val F1,0.7832,25.0,0.485,0.7557,0.8374,0.757
