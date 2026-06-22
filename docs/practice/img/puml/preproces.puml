@@ -1,0 +1,68 @@
+@startuml
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam ArrowColor #111111
+skinparam ActivityBorderColor #111111
+skinparam ActivityBackgroundColor white
+skinparam ActivityFontColor #111111
+skinparam ActivityFontName Inter
+skinparam ActivityFontSize 13
+skinparam DiamondBorderColor #111111
+skinparam DiamondBackgroundColor white
+skinparam DiamondFontColor #111111
+skinparam defaultTextAlignment center
+
+start
+
+:Исходные CSV-файлы Empatica E4;
+
+:Извлечение частот дискретизации из заголовков;
+note right
+ACC 32 Гц
+BVP 64 Гц
+EDA 4 Гц
+TEMP 4 Гц
+HR 1 Гц
+end note
+
+:Приведение к единой частоте дискретизации;
+note right
+100 отсчётов на окно 5 с
+Метод: линейная интерполяция
+end note
+
+:Загрузка временных меток из tags.csv;
+
+if (Положение окна в протоколе?) then (начальная фаза)
+:Присвоить метку 0 норма;
+elseif (заключительная фаза)
+:Присвоить метку 1 утомление;
+else (переходный интервал)
+:Исключить окно;
+stop
+endif
+
+:Субъектная нормализация z-score;
+note right
+По каждому каналу
+mu и sigma считаются только по субъекту
+end note
+
+:LOSO-разделение для итерации i;
+fork
+:Обучающая выборка субъекты не равны i;
+:Балансировка SMOTE только train;
+fork again
+:Контрольная выборка субъект i;
+end fork
+
+:Формирование тензоров;
+note right
+X_imu
+X_physio
+y
+profiles
+end note
+
+stop
+@enduml

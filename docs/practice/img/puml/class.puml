@@ -1,0 +1,82 @@
+@startuml
+
+' ======================= КЛЮЧЕВЫЕ СЕРВИСЫ =======================
+class FatiguePredictionService {
+  - List<IPredictionListener> listeners
+  - MlFatigueClient mlClient
+  + analyzeAndSave(): Mono<FatiguePrediction>
+  + getLatestForAthlete(id: Long): FatiguePrediction
+  + wasAlerted(): boolean
+}
+
+class MlFatigueClient {
+  + predict(window, profile, subjectId): Mono<MlPredictDto>
+}
+
+class NotificationService {
+  + create(dto: NotificationDto): NotificationResponseDto
+  + getForAthlete(athleteId: Long): List<NotificationResponseDto>
+  + markAsRead(notificationId: Long): void
+}
+
+' ======================= OBSERVER PATTERN =======================
+interface IPredictionListener {
+  + onNewPrediction(pred: FatiguePrediction): void
+}
+
+class AlertNotificationListener implements IPredictionListener {
+  - EmailNotificationTemplate emailTemplate
+  - PushNotificationTemplate pushTemplate
+  - {static} DEFAULT_THRESHOLD: 0.5
+}
+
+class WebSocketBroadcastListener implements IPredictionListener {
+  - SimpMessagingTemplate messagingTemplate
+}
+
+' ======================= NOTIFICATION PATTERN =======================
+abstract class NotificationTemplate {
+  + notify(athleteId: Long, message: String): void
+  # {abstract} validate(athleteId: Long, message: String): void
+  # {abstract} send(athleteId: Long, message: String): void
+  # {abstract} getNotificationType(): NotificationType
+}
+
+class EmailNotificationTemplate extends NotificationTemplate {
+}
+
+class PushNotificationTemplate extends NotificationTemplate {
+}
+
+' ======================= EXPORT PATTERN =======================
+interface IExportStrategy {
+  + supports(format: String): boolean
+  + export(req: ExportRequest): void
+}
+
+class ExportContext {
+  - List<IExportStrategy> strategies
+  + export(req: ExportRequest): void
+}
+
+class CsvExportStrategy implements IExportStrategy {
+}
+
+class PdfExportStrategy implements IExportStrategy {
+}
+
+' ======================= ЗАВИСИМОСТИ =======================
+FatiguePredictionService --> MlFatigueClient
+FatiguePredictionService --> IPredictionListener
+
+AlertNotificationListener --> EmailNotificationTemplate
+AlertNotificationListener --> PushNotificationTemplate
+AlertNotificationListener --> NotificationTemplate
+
+ExportContext --> IExportStrategy
+
+EmailNotificationTemplate --|> NotificationTemplate
+PushNotificationTemplate --|> NotificationTemplate
+
+
+@enduml

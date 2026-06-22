@@ -1,0 +1,113 @@
+@startuml
+title Общая структура системы мониторинга физического переутомления спортсменов
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam wrapWidth 220
+skinparam maxMessageSize 220
+
+actor "Пользователь\nспортсмен / тренер" as User
+
+node "Носимое устройство\nсенсор / Empatica E4" as Sensor {
+  component "Датчики" as WearableSensors
+  component "Сбор физиологических\nи инерциальных сигналов" as SignalCollector
+}
+
+node "Мобильное устройство" as MobileDevice {
+  component "Мобильное приложение\nFront-end Flutter" as FlutterApp
+  component "BLE-модуль\nприём данных сенсора" as BLE
+  component "Экран мониторинга\nуровня утомления" as MonitoringUI
+  component "Экран рекомендаций" as RecommendationUI
+}
+
+node "Backend-сервер" as BackendNode {
+  component "Spring Boot Backend\nBackend for Front-end" as SpringBackend
+  component "REST API\nдля мобильного приложения" as RestApi
+  component "Модуль сессий\nмониторинга" as SessionModule
+  component "Модуль пользователей\nи авторизации JWT" as AuthModule
+  component "Модуль хранения\nрезультатов" as ResultModule
+}
+
+database "PostgreSQL" as PostgreSQL {
+  component "Пользователи" as UsersTable
+  component "Сессии мониторинга" as SessionsTable
+  component "Окна сигналов" as WindowsTable
+  component "Результаты классификации" as ResultsTable
+  component "Рекомендации" as RecommendationsTable
+}
+
+node "ML-сервис" as MLNode {
+  component "FastAPI ML Service" as FastApi
+  component "gRPC API\nинференса" as GrpcApi
+  component "Предобработка окна" as RuntimePreprocessing
+  component "FatigueWristNet\nTorchScript-модель" as FatigueWristNet
+  component "Постобработка\nвероятности" as Postprocessing
+}
+
+cloud "Offline-пайплайн\nподготовки модели" as OfflinePipeline {
+  component "Набор данных\nPhysioNet / Empatica E4" as Dataset
+  component "Предварительная\nобработка данных" as Preprocessing
+  component "LOSO-CV\nобучение модели" as Training
+  component "Оценка метрик\nF1-macro / ROC-AUC / PR-AUC" as Evaluation
+  component "Экспорт весов\nTorchScript" as ModelExport
+}
+
+User --> FlutterApp : использует приложение
+FlutterApp --> User : показывает состояние\nи рекомендации
+
+WearableSensors --> SignalCollector : формируют сигналы
+SignalCollector --> BLE : передача по Bluetooth Low Energy
+BLE --> FlutterApp : поток данных сенсора
+
+FlutterApp --> RestApi : HTTPS / REST\nсессии, окна сигналов
+RestApi --> SpringBackend
+SpringBackend --> AuthModule : проверка JWT
+SpringBackend --> SessionModule : управление сессией
+SpringBackend --> ResultModule : сохранение результатов
+
+SessionModule --> PostgreSQL : запись сессий
+ResultModule --> PostgreSQL : запись окон,\nрезультатов и рекомендаций
+AuthModule --> PostgreSQL : пользователи\nи права доступа
+
+SpringBackend --> GrpcApi : gRPC-запрос\nна классификацию окна
+GrpcApi --> FastApi
+FastApi --> RuntimePreprocessing : нормализация,\nпроверка размерности,\nподготовка тензора
+RuntimePreprocessing --> FatigueWristNet : входной тензор окна
+FatigueWristNet --> Postprocessing : вероятность fatigue
+Postprocessing --> FastApi : класс + вероятность\n+ служебные признаки
+FastApi --> GrpcApi
+GrpcApi --> SpringBackend : gRPC-ответ\nс результатом инференса
+
+SpringBackend --> FlutterApp : REST-ответ\nуровень утомления,\nрекомендации
+FlutterApp --> MonitoringUI
+FlutterApp --> RecommendationUI
+
+Dataset --> Preprocessing
+Preprocessing --> Training
+Training --> Evaluation
+Evaluation --> ModelExport
+ModelExport --> FatigueWristNet : загрузка обученной модели
+
+note right of RuntimePreprocessing
+  Runtime-предобработка:
+  - проверка формата окна
+  - приведение каналов к входному формату модели
+  - нормализация
+  - разделение на инерциальную и физиологическую группы
+end note
+
+note right of FatigueWristNet
+  FatigueWristNet:
+  - IMU-ветвь CNN
+  - физиологическая ветвь CNN
+  - темпоральное внимание
+  - объединение признаков
+  - бинарная классификация fatigue / normal
+end note
+
+note bottom of OfflinePipeline
+  Offline-пайплайн используется для подготовки модели.
+  Runtime-система использует уже экспортированные веса.
+end note
+
+@enduml
