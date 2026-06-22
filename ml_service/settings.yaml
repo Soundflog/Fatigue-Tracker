@@ -1,0 +1,22 @@
+service:
+  name: AthleteFatigueTracker ML Service
+  host: 0.0.0.0
+  port: 8000
+  debug: false
+
+model:
+  version: fatiguewristnet-v8.1
+  path: ../res/results_v8_stress/results_test/best_model_v8_best.pth
+  normalization: global-v8
+  threshold: 0.5
+  stress_profile_size: 12
+
+runtime:
+  use_stub_inference: true
+  torch_device: cpu
+
+api:
+  default_category_thresholds:
+    normal: 0.2
+    mild: 0.45
+    moderate: 0.75

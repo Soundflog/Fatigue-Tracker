@@ -1,0 +1,47 @@
+syntax = "proto3";
+package afc.ml.v1;
+
+service FatigueInference {
+  rpc Predict(PredictRequest) returns (PredictResponse);
+  rpc PredictBatch(PredictBatchRequest) returns (PredictBatchResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message Tensor {
+  repeated int32 shape = 1;
+  bytes data = 2;
+}
+
+message PredictRequest {
+  Tensor imu = 1;
+  Tensor physio = 2;
+  bool has_physio = 3;
+  Tensor stress_profile = 4;
+  string subject_id = 5;
+  string normalization = 6;
+  string request_id = 7;
+}
+
+message PredictResponse {
+  float fatigue_degree = 1;
+  string category = 2;
+  float threshold = 3;
+  string model_version = 4;
+  int32 latency_ms = 5;
+  string request_id = 6;
+}
+
+message PredictBatchRequest {
+  repeated PredictRequest items = 1;
+}
+
+message PredictBatchResponse {
+  repeated PredictResponse items = 1;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string model_version = 2;
+}
