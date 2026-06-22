@@ -1,0 +1,2 @@
+model,val_threshold,test_f1_val_thr,test_f1_opt_thr,test_roc_auc,test_pr_auc,test_balanced_acc,n_features,win_sec,hop_sec
+XGBoost + NeuroKit2 (v11),0.8839195979899498,0.7154607668495352,0.7783745903267313,0.8411293068967487,0.8521011222629353,0.7265543683218102,46,30.0,5.0

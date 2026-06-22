@@ -1,0 +1,2 @@
+model,total_params,train_samples,val_samples,test_samples,best_epoch,test_f1_macro,test_f1_weighted,test_balanced_acc,test_roc_auc,test_pr_auc,loso_f1_mean,loso_f1_std,loso_auc_mean,loso_auc_std
+FatigueCNN1D,176321,21173,476,3219,14,0.7258782217198316,0.7250531549181902,0.7346304020391612,0.8536519522650909,0.8555983272136598,0.6733242979293317,0.19710391442606756,0.8437179370748403,0.09081693216727674

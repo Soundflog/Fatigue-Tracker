@@ -1,0 +1,9 @@
+Model,Task,Features,Test F1-macro,ROC-AUC,LOSO F1,Notes
+LogReg,Fatigue in exercise,"NeuroKit2, 30s windows",0.6776,0.7283,—,Baseline ML (NeuroKit2)
+RandomForest,Fatigue in exercise,"NeuroKit2, 30s windows",0.7097,0.7973,0.6368±0.1871,Baseline ML (NeuroKit2)
+ExtraTrees,Fatigue in exercise,"NeuroKit2, 30s windows",0.7616,0.8227,—,Baseline ML (NeuroKit2)
+GradBoost,Fatigue in exercise,"NeuroKit2, 30s windows",0.7637,0.8402,—,Baseline ML (NeuroKit2)
+XGBoost,Fatigue in exercise,"NeuroKit2, 30s windows",0.7155,0.8411,0.6853±0.1437,Baseline ML (NeuroKit2)
+CNN v8.1 (dual-branch baseline),Fatigue in exercise,Raw 5s windows (100×6 IMU + 100×4 Physio),0.8260,~0.89,0.810±0.070,v8b_t_physio_stress.ipynb — best CNN baseline
+CNN v8c (SE+SWA+RDrop+FiLM),Fatigue in exercise,Raw 5s windows + Stress Profile (13 feat) + FiLM,0.8264 (opt-thr),0.9057,0.8263±0.118,"Best overall AUC, 17.8K params"
+Hongn et al. 2025 (XGBoost),Stress vs Rest  ← DIFFERENT task,NeuroKit2 (full session),—,—,—,93% accuracy; task is 2–3× easier
