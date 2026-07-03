@@ -5,3 +5,5 @@ afc/__init__.py
 /data/raw
 /data/wearable-device-dataset-from-induced-stress-and-structured-exercise-sessions-1.0.1
 /scripts/__pycache__
+/ml_service/app/__pycache__
+/ml_service/app/__pycache__
