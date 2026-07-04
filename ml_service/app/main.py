@@ -5,12 +5,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from .model_runtime import StubInferenceEngine
+from .model_runtime import create_inference_engine
 from .schemas import HealthResponse, PredictBatchRequest, PredictBatchResponse, PredictRequest, PredictResponse
 from .settings import settings
 
 app = FastAPI(title=settings.service.name, version=settings.model.version)
-engine = StubInferenceEngine(settings)
+engine = create_inference_engine(settings)
 
 
 def _problem(status: int, title: str, detail: str, instance: str, extra: dict | None = None) -> JSONResponse:

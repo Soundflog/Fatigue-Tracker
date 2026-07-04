@@ -9,10 +9,10 @@ model:
   path: ../res/results_v8_stress/results_test/best_model_v8_best.pth
   normalization: global-v8
   threshold: 0.5
-  stress_profile_size: 12
+  stress_profile_size: 13
 
 runtime:
-  use_stub_inference: true
+  use_stub_inference: false
   torch_device: cpu
 
 api:
